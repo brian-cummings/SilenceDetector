@@ -1,15 +1,16 @@
 param(
-    [double]$Threshold = $null,
-    [double]$MinSilence = $null,
-    [double]$StartEndSilenceDuration = $null,
-    [double]$MiddleSilenceDuration = $null,
-    [double]$ContentThreshold = $null,
+    [System.Nullable[double]]$Threshold,
+    [System.Nullable[double]]$MinSilence,
+    [System.Nullable[double]]$StartEndSilenceDuration,
+    [System.Nullable[double]]$MiddleSilenceDuration,
+    [System.Nullable[double]]$ContentThreshold,
     [string]$InputPath = "",
     [string]$OutputPath = "",
     [string]$UnmodifiedOriginalsPath = "",
     [string]$LogsPath = "",
     [switch]$DryRun
 )
+
 
 # Configuration file loading function
 function Read-ConfigFile {
@@ -131,11 +132,26 @@ function Read-ConfigFile {
 $config = Read-ConfigFile
 
 # Apply config values, but allow command line parameters to override
-if ($Threshold -ne $null) { $config.Threshold = $Threshold }
-if ($MinSilence -ne $null) { $config.MinSilence = $MinSilence }
-if ($StartEndSilenceDuration -ne $null) { $config.StartEndSilenceDuration = $StartEndSilenceDuration }
-if ($MiddleSilenceDuration -ne $null) { $config.MiddleSilenceDuration = $MiddleSilenceDuration }
-if ($ContentThreshold -ne $null) { $config.ContentThreshold = $ContentThreshold }
+if ($Threshold.HasValue) { 
+    Write-Host "  Overriding Threshold: $($config.Threshold) -> $($Threshold.Value)" -ForegroundColor Yellow
+    $config.Threshold = $Threshold.Value 
+}
+if ($MinSilence.HasValue) { 
+    Write-Host "  Overriding MinSilence: $($config.MinSilence) -> $($MinSilence.Value)" -ForegroundColor Yellow
+    $config.MinSilence = $MinSilence.Value 
+}
+if ($StartEndSilenceDuration.HasValue) { 
+    Write-Host "  Overriding StartEndSilenceDuration: $($config.StartEndSilenceDuration) -> $($StartEndSilenceDuration.Value)" -ForegroundColor Yellow
+    $config.StartEndSilenceDuration = $StartEndSilenceDuration.Value 
+}
+if ($MiddleSilenceDuration.HasValue) { 
+    Write-Host "  Overriding MiddleSilenceDuration: $($config.MiddleSilenceDuration) -> $($MiddleSilenceDuration.Value)" -ForegroundColor Yellow
+    $config.MiddleSilenceDuration = $MiddleSilenceDuration.Value 
+}
+if ($ContentThreshold.HasValue) { 
+    Write-Host "  Overriding ContentThreshold: $($config.ContentThreshold) -> $($ContentThreshold.Value)" -ForegroundColor Yellow
+    $config.ContentThreshold = $ContentThreshold.Value 
+}
 if (-not [string]::IsNullOrEmpty($InputPath)) { $config.InputPath = $InputPath }
 if (-not [string]::IsNullOrEmpty($OutputPath)) { $config.OutputPath = $OutputPath }
 if (-not [string]::IsNullOrEmpty($UnmodifiedOriginalsPath)) { $config.UnmodifiedOriginalsPath = $UnmodifiedOriginalsPath }
@@ -143,6 +159,7 @@ if (-not [string]::IsNullOrEmpty($LogsPath)) { $config.LogsPath = $LogsPath }
 if ($DryRun) { $config.DryRun = $true }
 
 # Validate configuration values to prevent problematic settings
+
 if ($config.Threshold -gt -10) {
     Write-Warning "Threshold value ($($config.Threshold) dB) is unusually high. This may detect too much as silence. Recommended: -40 to -20 dB"
 }
