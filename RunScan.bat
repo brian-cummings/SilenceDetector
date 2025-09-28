@@ -13,16 +13,31 @@ echo Starting scan...
 
 REM Check if PowerShell Core is available
 where pwsh >nul 2>nul
-if %ERRORLEVEL% EQU 0 (
-    echo Using PowerShell Core (pwsh)...
-    pwsh -ExecutionPolicy Bypass -File "%~dp0ScanSilence.ps1"
-) else (
-    echo ERROR: PowerShell Core (pwsh) not found!
-    echo Please install PowerShell Core using: winget install Microsoft.PowerShell
-    echo Or download from: https://github.com/PowerShell/PowerShell
-    pause
-    exit /b 1
-)
+if %ERRORLEVEL% EQU 0 goto :use_pwsh
+
+REM PowerShell Core not found, try Windows PowerShell
+echo PowerShell Core (pwsh) not found, trying Windows PowerShell...
+where powershell >nul 2>nul
+if %ERRORLEVEL% EQU 0 goto :use_powershell
+
+REM No PowerShell found
+echo ERROR: No PowerShell found!
+echo Please install PowerShell Core using: winget install Microsoft.PowerShell
+echo Or download from: https://github.com/PowerShell/PowerShell
+pause
+exit /b 1
+
+:use_pwsh
+echo Using PowerShell Core (pwsh)...
+pwsh -ExecutionPolicy Bypass -NoProfile -File "%~dp0ScanSilence.ps1"
+goto :check_result
+
+:use_powershell
+echo Using Windows PowerShell...
+powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0ScanSilence.ps1"
+goto :check_result
+
+:check_result
 
 if %ERRORLEVEL% EQU 0 (
     echo.
