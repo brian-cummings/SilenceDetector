@@ -1,0 +1,18 @@
+# SilenceDetector Configuration File
+# Edit these values to customize the script behavior without modifying the PowerShell code
+
+# Silence Detection Settings
+threshold=-40
+minSilence=3
+startEndSilenceDuration=0.5
+middleSilenceDuration=2.5
+contentThreshold=0.1
+
+# Folder Paths (use ~ for home directory or absolute paths)
+inputPath=~/Downloads/Input
+outputPath=~/Downloads/Output
+unmodifiedOriginalsPath=~/Downloads/UnmodifiedOriginals
+logsPath=~/Downloads/Logs
+
+# Processing Options
+dryRun=false

@@ -88,6 +88,48 @@ The `-DryRun` parameter enables analysis mode where the script examines files an
 
 ## Configuration
 
+### Configuration File
+
+The script now supports a simple text configuration file (`config.txt`) that allows you to customize all settings without modifying the PowerShell code. This makes it much easier to adjust thresholds and paths for different use cases.
+
+#### Config File Location
+- **Default**: `config.txt` in the same directory as the PowerShell script
+- **Format**: Simple key=value pairs with comments (lines starting with #)
+
+#### Config File Example
+```ini
+# SilenceDetector Configuration File
+# Edit these values to customize the script behavior without modifying the PowerShell code
+
+# Silence Detection Settings
+threshold=-40
+minSilence=3
+startEndSilenceDuration=0.5
+middleSilenceDuration=2.5
+contentThreshold=0.1
+
+# Folder Paths (use ~ for home directory or absolute paths)
+inputPath=~/Downloads/Input
+outputPath=~/Downloads/Output
+unmodifiedOriginalsPath=~/Downloads/UnmodifiedOriginals
+logsPath=~/Downloads/Logs
+
+# Processing Options
+dryRun=false
+```
+
+#### Config File Benefits
+- **Easy customization**: Change settings without touching PowerShell code
+- **Version control friendly**: Keep your settings separate from the script
+- **Multiple configurations**: Create different config files for different scenarios
+- **Command line override**: Parameters passed via command line still override config file values
+- **Fallback defaults**: If config file is missing, sensible defaults are used
+
+#### Configuration Priority
+1. **Command line parameters** (highest priority)
+2. **Config file values**
+3. **Built-in defaults** (lowest priority)
+
 ### Default Parameters
 - **Threshold**: -40 dB (adjustable via `-Threshold` parameter)
 - **MinSilence**: 3 seconds (adjustable via `-MinSilence` parameter)
@@ -104,7 +146,11 @@ The `-DryRun` parameter enables analysis mode where the script examines files an
 
 ### Custom Parameters
 
-**Basic usage with custom thresholds:**
+**Option 1: Using config file (recommended for regular use)**
+1. Edit `config.txt` with your desired settings
+2. Run the script normally: `pwsh ./ScanSilence.ps1`
+
+**Option 2: Command line parameters (for one-time overrides)**
 ```powershell
 pwsh ./ScanSilence.ps1 -Threshold -35 -MinSilence 5
 ```
@@ -196,6 +242,7 @@ Longest silence detected: 00:00:05.250
 ## Files
 
 - `ScanSilence.ps1` - Main PowerShell script
+- `config.txt` - Configuration file for easy customization of settings
 - `RunScan.bat` - Windows batch file for easy execution
 - `RunScan.sh` - macOS/Linux shell script for easy execution
 - `README.md` - This documentation
@@ -204,26 +251,28 @@ Longest silence detected: 00:00:05.250
 
 ### Option 1: Default Behavior (Downloads Folder)
 1. **Setup**: Place `ffmpeg.exe` (Windows) or `ffmpeg` (Mac/Linux) in the script directory
-2. **Place MP3 files** in `~/Downloads/Input` folder (created automatically)
-3. **Run** the appropriate script for your platform
-4. **Processing**: The script will:
+2. **Configure** (optional): Edit `config.txt` to customize thresholds and paths
+3. **Place MP3 files** in `~/Downloads/Input` folder (created automatically)
+4. **Run** the appropriate script for your platform
+5. **Processing**: The script will:
    - Scan all MP3 files for silence
    - Process files with problematic silence (trim/reduce)
    - Move originals with silence to `~/Downloads/UnmodifiedOriginals`
    - Place all processed/clean files in `~/Downloads/Output`
    - Move files from the `~/Downloads/Input` folder
-5. **Review** results:
+6. **Review** results:
    - Cleaned files ready for playout: `~/Downloads/Output` folder
    - Original problematic files: `~/Downloads/UnmodifiedOriginals` folder  
    - Detailed reports: `~/Downloads/Logs` folder
 
 ### Option 2: Custom Absolute Paths
 1. **Setup**: Place `ffmpeg.exe` (Windows) or `ffmpeg` (Mac/Linux) in the script directory
-2. **Run** the script from anywhere with absolute paths:
+2. **Configure**: Edit `config.txt` with your custom paths, or use command line parameters
+3. **Run** the script from anywhere:
    ```powershell
    pwsh /path/to/ScanSilence.ps1 -InputPath "/absolute/path/to/mp3s" -OutputPath "/path/to/clean" -UnmodifiedOriginalsPath "/path/to/originals" -LogsPath "/absolute/path/to/reports"
    ```
-3. **Review** results in your specified directories
+4. **Review** results in your specified directories
 
 ## License
 

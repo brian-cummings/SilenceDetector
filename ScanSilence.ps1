@@ -1,9 +1,9 @@
 param(
-    [double]$Threshold = -40,
-    [double]$MinSilence = 3,
-    [double]$StartEndSilenceDuration = 0.5,
-    [double]$MiddleSilenceDuration = 2.5,
-    [double]$ContentThreshold = 0.1,
+    [double]$Threshold = $null,
+    [double]$MinSilence = $null,
+    [double]$StartEndSilenceDuration = $null,
+    [double]$MiddleSilenceDuration = $null,
+    [double]$ContentThreshold = $null,
     [string]$InputPath = "",
     [string]$OutputPath = "",
     [string]$UnmodifiedOriginalsPath = "",
@@ -11,30 +11,110 @@ param(
     [switch]$DryRun
 )
 
-# Set default paths
-if ([string]::IsNullOrEmpty($InputPath)) {
-    $InputFolder = "~/Downloads/Input"
-} else {
-    $InputFolder = $InputPath
+# Configuration file loading function
+function Read-ConfigFile {
+    param([string]$ConfigPath = "config.txt")
+    
+    $config = @{
+        Threshold = -40
+        MinSilence = 3
+        StartEndSilenceDuration = 0.5
+        MiddleSilenceDuration = 2.5
+        ContentThreshold = 0.1
+        InputPath = "~/Downloads/Input"
+        OutputPath = "~/Downloads/Output"
+        UnmodifiedOriginalsPath = "~/Downloads/UnmodifiedOriginals"
+        LogsPath = "~/Downloads/Logs"
+        DryRun = $false
+    }
+    
+    if (Test-Path $ConfigPath) {
+        Write-Host "Loading configuration from: $ConfigPath" -ForegroundColor Cyan
+        
+        $lines = Get-Content $ConfigPath
+        foreach ($line in $lines) {
+            $line = $line.Trim()
+            
+            # Skip empty lines and comments
+            if ([string]::IsNullOrEmpty($line) -or $line.StartsWith("#")) {
+                continue
+            }
+            
+            # Parse key=value pairs
+            if ($line -match "^([^=]+)=(.*)$") {
+                $key = $matches[1].Trim().ToLower()
+                $value = $matches[2].Trim()
+                
+                switch ($key) {
+                    "threshold" { 
+                        if ([double]::TryParse($value, [ref]$null)) {
+                            $config.Threshold = [double]$value
+                        }
+                    }
+                    "minsilence" { 
+                        if ([double]::TryParse($value, [ref]$null)) {
+                            $config.MinSilence = [double]$value
+                        }
+                    }
+                    "startendsilenceduration" { 
+                        if ([double]::TryParse($value, [ref]$null)) {
+                            $config.StartEndSilenceDuration = [double]$value
+                        }
+                    }
+                    "middlesilenceduration" { 
+                        if ([double]::TryParse($value, [ref]$null)) {
+                            $config.MiddleSilenceDuration = [double]$value
+                        }
+                    }
+                    "contentthreshold" { 
+                        if ([double]::TryParse($value, [ref]$null)) {
+                            $config.ContentThreshold = [double]$value
+                        }
+                    }
+                    "inputpath" { $config.InputPath = $value }
+                    "outputpath" { $config.OutputPath = $value }
+                    "unmodifiedoriginalspath" { $config.UnmodifiedOriginalsPath = $value }
+                    "logspath" { $config.LogsPath = $value }
+                    "dryrun" { 
+                        $config.DryRun = ($value -eq "true" -or $value -eq "1")
+                    }
+                }
+            }
+        }
+    } else {
+        Write-Host "Config file not found: $ConfigPath - Using defaults" -ForegroundColor Yellow
+    }
+    
+    return $config
 }
 
-if ([string]::IsNullOrEmpty($OutputPath)) {
-    $OutputFolder = "~/Downloads/Output"
-} else {
-    $OutputFolder = $OutputPath
-}
+# Load configuration
+$config = Read-ConfigFile
 
-if ([string]::IsNullOrEmpty($UnmodifiedOriginalsPath)) {
-    $UnmodifiedOriginalsFolder = "~/Downloads/UnmodifiedOriginals"
-} else {
-    $UnmodifiedOriginalsFolder = $UnmodifiedOriginalsPath
-}
+# Apply config values, but allow command line parameters to override
+if ($Threshold -ne $null) { $config.Threshold = $Threshold }
+if ($MinSilence -ne $null) { $config.MinSilence = $MinSilence }
+if ($StartEndSilenceDuration -ne $null) { $config.StartEndSilenceDuration = $StartEndSilenceDuration }
+if ($MiddleSilenceDuration -ne $null) { $config.MiddleSilenceDuration = $MiddleSilenceDuration }
+if ($ContentThreshold -ne $null) { $config.ContentThreshold = $ContentThreshold }
+if (-not [string]::IsNullOrEmpty($InputPath)) { $config.InputPath = $InputPath }
+if (-not [string]::IsNullOrEmpty($OutputPath)) { $config.OutputPath = $OutputPath }
+if (-not [string]::IsNullOrEmpty($UnmodifiedOriginalsPath)) { $config.UnmodifiedOriginalsPath = $UnmodifiedOriginalsPath }
+if (-not [string]::IsNullOrEmpty($LogsPath)) { $config.LogsPath = $LogsPath }
+if ($config.DryRun) { $config.DryRun = $true }
 
-if ([string]::IsNullOrEmpty($LogsPath)) {
-    $LogsFolder = "~/Downloads/Logs"
-} else {
-    $LogsFolder = $LogsPath
-}
+# Set variables from config
+$Threshold = $config.Threshold
+$MinSilence = $config.MinSilence
+$StartEndSilenceDuration = $config.StartEndSilenceDuration
+$MiddleSilenceDuration = $config.MiddleSilenceDuration
+$ContentThreshold = $config.ContentThreshold
+
+# Set paths from config
+$InputFolder = $config.InputPath
+$OutputFolder = $config.OutputPath
+$UnmodifiedOriginalsFolder = $config.UnmodifiedOriginalsPath
+$LogsFolder = $config.LogsPath
 
 # Resolve full paths for clearer reporting (handle tilde expansion)
 function Resolve-FullPath {
@@ -118,7 +198,7 @@ try {
     exit 1
 }
 
-if ($DryRun) {
+if ($config.DryRun) {
     Write-Host "🔍 DRY RUN MODE - Silence Detection Analysis - $timestamp" -ForegroundColor Yellow
     Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
     Write-Host "⚠️  NO FILES WILL BE MODIFIED - Analysis Only" -ForegroundColor Yellow
@@ -136,7 +216,7 @@ Write-Host "UnmodifiedOriginals folder: $UnmodifiedOriginalsFolder"
 Write-Host "Logs folder: $LogsFolder"
 
 # Initialize report files
-if ($DryRun) {
+if ($config.DryRun) {
     Add-Content -Path $txtReportFile -Value "🔍 DRY RUN MODE - Silence Detection Analysis - $timestamp"
     Add-Content -Path $txtReportFile -Value "═══════════════════════════════════════════════════════════"
     Add-Content -Path $txtReportFile -Value "⚠️  NO FILES WILL BE MODIFIED - Analysis Only"
@@ -550,7 +630,7 @@ $mp3Files = Get-ChildItem -Path $InputFolder -Filter "*.mp3" -Recurse
 
 if ($mp3Files.Count -eq 0) {
     Write-Host "No MP3 files found in $InputFolder"
-    if ($DryRun) {
+    if ($config.DryRun) {
         Add-Content -Path $txtReportFile -Value "No MP3 files found in input folder."
         Write-Host "TXT Report: $txtReportFile"
         exit 0
@@ -781,7 +861,7 @@ $filesWithoutSilence = $filesToProcess | Where-Object { -not $_.HasSilence }
 Write-Host "Files requiring silence processing: $($filesWithSilence.Count)"
 Write-Host "Files to move unchanged: $($filesWithoutSilence.Count)"
 
-if ($DryRun) {
+if ($config.DryRun) {
     Write-Host ""
     Write-Host "🔍 DRY RUN: Processing Plan"
     Write-Host "=========================="
@@ -899,7 +979,7 @@ if ($DryRun) {
 }
 
 # Clean up Input folder
-if ($DryRun) {
+if ($config.DryRun) {
     Write-Host ""
     Write-Host "🔍 DRY RUN: Input folder cleanup would remove $totalFiles files" -ForegroundColor Cyan
     Write-Host "Files that would be removed from Input folder:" -ForegroundColor Gray
@@ -945,7 +1025,7 @@ Write-Host "=========================================="
 Write-Host "SCAN COMPLETE"
 Write-Host "=========================================="
 
-if ($DryRun) {
+if ($config.DryRun) {
     Write-Host "🔍 DRY RUN ANALYSIS COMPLETE!" -ForegroundColor Yellow
     Write-Host "═════════════════════════════" -ForegroundColor Yellow
     Write-Host "Files analyzed: $filesProcessed"
