@@ -31,7 +31,15 @@ function Read-ConfigFile {
     if (Test-Path $ConfigPath) {
         Write-Host "Loading configuration from: $ConfigPath" -ForegroundColor Cyan
         
-        $lines = Get-Content $ConfigPath
+        try {
+            # Use UTF8 encoding to handle potential BOM issues on Windows
+            $lines = Get-Content $ConfigPath -Encoding UTF8 -ErrorAction Stop
+            Write-Verbose "Config: Successfully read $($lines.Count) lines from config file"
+        } catch {
+            Write-Warning "Config: Failed to read config file '$ConfigPath': $($_.Exception.Message)"
+            Write-Host "Using default configuration values" -ForegroundColor Yellow
+            return $config
+        }
         foreach ($line in $lines) {
             $line = $line.Trim()
             
@@ -44,31 +52,52 @@ function Read-ConfigFile {
             if ($line -match "^([^=]+)=(.*)$") {
                 $key = $matches[1].Trim().ToLower()
                 $value = $matches[2].Trim()
+                Write-Verbose "Config: Parsing line '$line' -> key='$key', value='$value'"
                 
                 switch ($key) {
                     "threshold" { 
-                        if ([double]::TryParse($value, [ref]$null)) {
-                            $config.Threshold = [double]$value
+                        $parsedValue = 0.0
+                        if ([double]::TryParse($value, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedValue)) {
+                            $config.Threshold = $parsedValue
+                            Write-Verbose "Config: Set Threshold = $parsedValue"
+                        } else {
+                            Write-Warning "Config: Failed to parse threshold value '$value', using default: $($config.Threshold)"
                         }
                     }
                     "minsilence" { 
-                        if ([double]::TryParse($value, [ref]$null)) {
-                            $config.MinSilence = [double]$value
+                        $parsedValue = 0.0
+                        if ([double]::TryParse($value, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedValue)) {
+                            $config.MinSilence = $parsedValue
+                            Write-Verbose "Config: Set MinSilence = $parsedValue"
+                        } else {
+                            Write-Warning "Config: Failed to parse minSilence value '$value', using default: $($config.MinSilence)"
                         }
                     }
                     "startendsilenceduration" { 
-                        if ([double]::TryParse($value, [ref]$null)) {
-                            $config.StartEndSilenceDuration = [double]$value
+                        $parsedValue = 0.0
+                        if ([double]::TryParse($value, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedValue)) {
+                            $config.StartEndSilenceDuration = $parsedValue
+                            Write-Verbose "Config: Set StartEndSilenceDuration = $parsedValue"
+                        } else {
+                            Write-Warning "Config: Failed to parse startEndSilenceDuration value '$value', using default: $($config.StartEndSilenceDuration)"
                         }
                     }
                     "middlesilenceduration" { 
-                        if ([double]::TryParse($value, [ref]$null)) {
-                            $config.MiddleSilenceDuration = [double]$value
+                        $parsedValue = 0.0
+                        if ([double]::TryParse($value, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedValue)) {
+                            $config.MiddleSilenceDuration = $parsedValue
+                            Write-Verbose "Config: Set MiddleSilenceDuration = $parsedValue"
+                        } else {
+                            Write-Warning "Config: Failed to parse middleSilenceDuration value '$value', using default: $($config.MiddleSilenceDuration)"
                         }
                     }
                     "contentthreshold" { 
-                        if ([double]::TryParse($value, [ref]$null)) {
-                            $config.ContentThreshold = [double]$value
+                        $parsedValue = 0.0
+                        if ([double]::TryParse($value, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedValue)) {
+                            $config.ContentThreshold = $parsedValue
+                            Write-Verbose "Config: Set ContentThreshold = $parsedValue"
+                        } else {
+                            Write-Warning "Config: Failed to parse contentThreshold value '$value', using default: $($config.ContentThreshold)"
                         }
                     }
                     "inputpath" { $config.InputPath = $value }
@@ -79,8 +108,18 @@ function Read-ConfigFile {
                         $config.DryRun = ($value -eq "true" -or $value -eq "1")
                     }
                 }
+            } else {
+                Write-Verbose "Config: Skipping invalid line (no key=value pattern): '$line'"
             }
         }
+        
+        # Show summary of loaded values
+        Write-Host "Config loaded successfully:" -ForegroundColor Green
+        Write-Host "  Threshold: $($config.Threshold) dB" -ForegroundColor Gray
+        Write-Host "  MinSilence: $($config.MinSilence) seconds" -ForegroundColor Gray
+        Write-Host "  StartEndSilenceDuration: $($config.StartEndSilenceDuration) seconds" -ForegroundColor Gray
+        Write-Host "  MiddleSilenceDuration: $($config.MiddleSilenceDuration) seconds" -ForegroundColor Gray
+        Write-Host "  ContentThreshold: $($config.ContentThreshold) seconds" -ForegroundColor Gray
     } else {
         Write-Host "Config file not found: $ConfigPath - Using defaults" -ForegroundColor Yellow
     }
@@ -90,14 +129,6 @@ function Read-ConfigFile {
 
 # Load configuration
 $config = Read-ConfigFile
-
-# Debug: Show loaded configuration values
-Write-Host "Loaded configuration values:" -ForegroundColor Cyan
-Write-Host "  Threshold: $($config.Threshold) dB" -ForegroundColor Gray
-Write-Host "  MinSilence: $($config.MinSilence) seconds" -ForegroundColor Gray
-Write-Host "  StartEndSilenceDuration: $($config.StartEndSilenceDuration) seconds" -ForegroundColor Gray
-Write-Host "  MiddleSilenceDuration: $($config.MiddleSilenceDuration) seconds" -ForegroundColor Gray
-Write-Host "  ContentThreshold: $($config.ContentThreshold) seconds" -ForegroundColor Gray
 
 # Apply config values, but allow command line parameters to override
 if ($Threshold -ne $null) { $config.Threshold = $Threshold }
