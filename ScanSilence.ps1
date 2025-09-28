@@ -91,6 +91,14 @@ function Read-ConfigFile {
 # Load configuration
 $config = Read-ConfigFile
 
+# Debug: Show loaded configuration values
+Write-Host "Loaded configuration values:" -ForegroundColor Cyan
+Write-Host "  Threshold: $($config.Threshold) dB" -ForegroundColor Gray
+Write-Host "  MinSilence: $($config.MinSilence) seconds" -ForegroundColor Gray
+Write-Host "  StartEndSilenceDuration: $($config.StartEndSilenceDuration) seconds" -ForegroundColor Gray
+Write-Host "  MiddleSilenceDuration: $($config.MiddleSilenceDuration) seconds" -ForegroundColor Gray
+Write-Host "  ContentThreshold: $($config.ContentThreshold) seconds" -ForegroundColor Gray
+
 # Apply config values, but allow command line parameters to override
 if ($Threshold -ne $null) { $config.Threshold = $Threshold }
 if ($MinSilence -ne $null) { $config.MinSilence = $MinSilence }
@@ -101,7 +109,24 @@ if (-not [string]::IsNullOrEmpty($InputPath)) { $config.InputPath = $InputPath }
 if (-not [string]::IsNullOrEmpty($OutputPath)) { $config.OutputPath = $OutputPath }
 if (-not [string]::IsNullOrEmpty($UnmodifiedOriginalsPath)) { $config.UnmodifiedOriginalsPath = $UnmodifiedOriginalsPath }
 if (-not [string]::IsNullOrEmpty($LogsPath)) { $config.LogsPath = $LogsPath }
-if ($config.DryRun) { $config.DryRun = $true }
+if ($DryRun) { $config.DryRun = $true }
+
+# Validate configuration values to prevent problematic settings
+if ($config.Threshold -gt -10) {
+    Write-Warning "Threshold value ($($config.Threshold) dB) is unusually high. This may detect too much as silence. Recommended: -40 to -20 dB"
+}
+if ($config.MinSilence -lt 0.1) {
+    Write-Warning "MinSilence value ($($config.MinSilence) seconds) is too low. This may cause performance issues and detect micro-silences. Minimum recommended: 0.5 seconds"
+    $config.MinSilence = [math]::Max($config.MinSilence, 0.1)  # Enforce minimum
+}
+if ($config.StartEndSilenceDuration -lt 0) {
+    Write-Warning "StartEndSilenceDuration cannot be negative. Setting to 0.5 seconds"
+    $config.StartEndSilenceDuration = 0.5
+}
+if ($config.MiddleSilenceDuration -lt 0) {
+    Write-Warning "MiddleSilenceDuration cannot be negative. Setting to 2.5 seconds"
+    $config.MiddleSilenceDuration = 2.5
+}
 
 # Set variables from config
 $Threshold = $config.Threshold
@@ -248,6 +273,18 @@ function Convert-ToTimecode {
     $milliseconds = [math]::Floor(($Seconds % 1) * 1000)
     
     return "{0:00}:{1:00}:{2:00}.{3:000}" -f $hours, $minutes, $secs, $milliseconds
+}
+
+function Format-FFmpegDuration {
+    param([double]$Seconds)
+    
+    # Ensure we always return a decimal format that FFmpeg can parse
+    # Avoid scientific notation by using ToString with fixed-point notation
+    # Round to 6 decimal places to avoid precision issues while maintaining accuracy
+    $rounded = [math]::Round($Seconds, 6)
+    
+    # Use fixed-point notation to avoid scientific notation
+    return $rounded.ToString("F6", [System.Globalization.CultureInfo]::InvariantCulture).TrimEnd('0').TrimEnd('.')
 }
 
 function Get-AudioProperties {
@@ -419,7 +456,6 @@ function Edit-AudioFile {
             return $result
         }
         
-        $selectFilter = $filterParts -join "+"
         
         $codecArgs = @()
         if ($AudioProperties.Valid) {
@@ -461,9 +497,10 @@ function Edit-AudioFile {
             if ($period.Location -eq "END") {
                 # END silence: just trim to silence start + reduced duration
                 $newDuration = $period.Start + $StartEndDuration
+                $formattedDuration = Format-FFmpegDuration $newDuration
                 $ffmpegArgs = @(
                     "-i", "`"$resolvedInputFile`"",
-                    "-t", "$newDuration"
+                    "-t", "$formattedDuration"
                 ) + $codecArgs + @(
                     "-map_metadata", "0",
                     "-write_xing", "1",
@@ -473,9 +510,10 @@ function Edit-AudioFile {
             } elseif ($period.Location -eq "START") {
                 # START silence: skip original silence, keep reduced silence + rest
                 $skipDuration = $period.End - $StartEndDuration
+                $formattedSkipDuration = Format-FFmpegDuration $skipDuration
                 $ffmpegArgs = @(
                     "-i", "`"$resolvedInputFile`"",
-                    "-ss", "$skipDuration"
+                    "-ss", "$formattedSkipDuration"
                 ) + $codecArgs + @(
                     "-map_metadata", "0",
                     "-write_xing", "1",
@@ -486,13 +524,12 @@ function Edit-AudioFile {
                 # MIDDLE silence: use precise segment approach with FFmpeg
                 # Split into: [0 to silence_start] + [silence_start for reduced_duration] + [silence_end to total_duration]
                 
-                $beforeEnd = $period.Start
-                $silenceStart = $period.Start  
-                $silenceEnd = $period.End
-                $afterStart = $period.End
+                $beforeEnd = Format-FFmpegDuration $period.Start
+                $silenceStart = Format-FFmpegDuration $period.Start
+                $afterStart = Format-FFmpegDuration $period.End
                 
                 # Create filter complex that concatenates three segments
-                $silenceEndTime = $silenceStart + $MiddleDuration
+                $silenceEndTime = Format-FFmpegDuration ($period.Start + $MiddleDuration)
                 $filterComplex = "[0:a]atrim=0:${beforeEnd},asetpts=PTS-STARTPTS[before];[0:a]atrim=${silenceStart}:${silenceEndTime},asetpts=PTS-STARTPTS[silence];[0:a]atrim=${afterStart},asetpts=PTS-STARTPTS[after];[before][silence][after]concat=n=3:v=0:a=1[out]"
                 
                 $ffmpegArgs = @(
@@ -762,7 +799,9 @@ for ($i = 0; $i -lt $totalFiles; $i++) {
                     $silenceEnd = [double]$matches[1]
                     $silenceDuration = $silenceEnd - $currentSilenceStart
                     
-                    if ($silenceDuration -ge $MinSilence) {
+                    # Filter out extremely small silence periods that can cause FFmpeg parsing issues
+                    # Minimum threshold of 0.001 seconds (1ms) to avoid scientific notation problems
+                    if ($silenceDuration -ge $MinSilence -and $silenceDuration -ge 0.001) {
                         $location = Get-SilenceLocation $currentSilenceStart $silenceEnd $totalDuration $ContentThreshold
                         
                         $fileSilencePeriods += @{
