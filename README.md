@@ -18,9 +18,9 @@ The script automatically creates and uses the following folder structure. By def
 ## Quick Start
 
 ### Windows
-Double-click `RunScan.bat` or run:
+Double-click `RunScan.bat` (requires PowerShell Core) or run manually:
 ```cmd
-powershell.exe -ExecutionPolicy Bypass -File "ScanSilence.ps1"
+pwsh -ExecutionPolicy Bypass -File "ScanSilence.ps1"
 ```
 
 ### macOS/Linux
@@ -206,9 +206,56 @@ The script uses different FFmpeg approaches optimized for each silence type:
 - Works with PowerShell Core (`pwsh`) on all platforms
 - Handles path resolution and tilde expansion correctly
 
+## Installation
+
+### Windows Installation (Recommended)
+
+Use Windows Package Manager (winget) to install the required dependencies:
+
+```cmd
+# Install PowerShell Core (recommended for better cross-platform compatibility)
+winget install Microsoft.PowerShell
+
+# Install FFmpeg
+winget install Gyan.FFmpeg
+```
+
+After installation:
+1. Restart your terminal or command prompt
+2. Verify installations:
+   ```cmd
+   pwsh --version
+   ffmpeg -version
+   ```
+
+### Manual Installation
+
+#### Windows
+- **PowerShell**: Use built-in Windows PowerShell or install PowerShell Core from [GitHub](https://github.com/PowerShell/PowerShell)
+- **FFmpeg**: Download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH, or place `ffmpeg.exe` and `ffprobe.exe` in the script directory
+
+#### macOS
+```bash
+# Using Homebrew
+brew install powershell ffmpeg
+
+# Using MacPorts
+sudo port install powershell ffmpeg
+```
+
+#### Linux
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install powershell ffmpeg
+
+# CentOS/RHEL/Fedora
+sudo dnf install powershell ffmpeg
+```
+
 ## Requirements
 
-- **PowerShell**: Windows built-in or PowerShell Core (`pwsh`) on Mac/Linux
+- **PowerShell Core (`pwsh`)**: Required on all platforms for cross-platform compatibility
 - **FFmpeg with FFprobe**: Audio processing and analysis tools
   - **Preferred**: Place `ffmpeg.exe` and `ffprobe.exe` (Windows) or `ffmpeg` and `ffprobe` (Mac/Linux) in the script directory
   - **Fallback**: Ensure both FFmpeg and FFprobe are in your system PATH
