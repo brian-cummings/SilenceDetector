@@ -10,7 +10,7 @@ This tool scans MP3 files for silence periods and automatically processes them t
 
 The script automatically creates and uses the following folder structure. By default, folders are created in ~/Downloads/, but you can specify absolute paths for any or all folders:
 
-- **Input** → MP3 files to scan (emptied after processing) - Default: ~/Downloads/Input
+- **Input** → MP3 files to scan (files moved from here after processing) - Default: ~/Downloads/Input
 - **Output** → Cleaned/processed files ready for playout - Default: ~/Downloads/Output
 - **UnmodifiedOriginals** → Original files that contained problematic silence - Default: ~/Downloads/UnmodifiedOriginals
 - **Logs** → Timestamped TXT reports - Default: ~/Downloads/Logs
@@ -41,7 +41,7 @@ pwsh ./ScanSilence.ps1
   - FFmpeg timeout protection prevents hanging on problematic files
   - Disk space validation before processing
   - Graceful handling of corrupted or locked files
-- **Memory-efficient processing**: Handles large file collections using batch processing
+- **Sequential processing**: Handles large file collections efficiently with detailed progress tracking
 - **Automatic processing**: Intelligently trims/reduces silence periods
 - **Smart silence handling**: 
   - START/END silence: Trimmed to configurable duration (default: 0.5 seconds)
@@ -49,13 +49,16 @@ pwsh ./ScanSilence.ps1
 - **File preservation**: Originals with silence moved to UnmodifiedOriginals
 - **Automatic folder creation**: Creates Input, Output, UnmodifiedOriginals, and Logs folders if missing
 - **Comprehensive reporting**: Generates detailed TXT reports with full analysis
+- **Metadata updates**: Updates audio duration metadata to match processed content
+- **File overwrite protection**: Prevents accidental overwriting of existing output files
+- **Frame-accurate processing**: Uses precise FFmpeg filters for timing accuracy
 - **Configurable parameters**: Adjustable silence threshold and minimum duration
 - **Intelligent silence location tagging**: Identifies silence as START, MIDDLE, or END based on surrounding content
   - START: Silence with meaningful content after but not before
   - END: Silence with meaningful content before but not after  
   - MIDDLE: Silence with meaningful content both before and after
 - **Timecode output**: Converts seconds to HH:MM:SS.mmm format
-- **Input folder cleanup**: Empties Input folder after processing
+- **Input folder cleanup**: Moves files from Input folder after processing
 - **Summary statistics**: Reports files processed, flagged, and longest silence detected
 
 ## Dry Run Mode
@@ -92,7 +95,6 @@ The `-DryRun` parameter enables analysis mode where the script examines files an
 - **MiddleSilenceDuration**: 2.5 seconds (adjustable via `-MiddleSilenceDuration` parameter)
 - **ContentThreshold**: 0.1 seconds (adjustable via `-ContentThreshold` parameter)
   - Minimum duration to consider as "meaningful content" when classifying silence location
-- **MaxParallelJobs**: Number of CPU cores (adjustable via `-MaxParallelJobs` parameter)
 - **DryRun**: Disabled (enable with `-DryRun` switch)
   - Analysis mode that shows what would be processed without making any changes
 - **InputPath**: "~/Downloads/Input" (or specify absolute path)
@@ -136,6 +138,27 @@ pwsh ./ScanSilence.ps1 -InputPath "C:\Music\ToScan" -OutputPath "C:\Music\Proces
 ```powershell
 pwsh ./ScanSilence.ps1 -InputPath "/Users/username/Music/ToScan" -OutputPath "/Users/username/Music/Processed" -UnmodifiedOriginalsPath "/Users/username/Music/Flagged" -LogsPath "/Users/username/Music/Reports"
 ```
+
+## Technical Implementation
+
+### Silence Processing Methods
+The script uses different FFmpeg approaches optimized for each silence type:
+
+- **END Silence**: Uses `-t` parameter to limit output duration (simple and reliable)
+- **START Silence**: Uses `-ss` parameter to skip initial silence (preserves audio quality)  
+- **MIDDLE Silence**: Uses `filter_complex` with `atrim` and `concat` for frame-accurate processing
+- **Multiple Silence**: Generalizes the `atrim + concat` approach for precise timing across all segments
+
+### Audio Quality Preservation
+- Automatically detects original audio properties using `ffprobe`
+- Maps codec names correctly (e.g., `mp3` → `libmp3lame`)
+- Preserves original bitrate, sample rate, and channel configuration
+- Updates metadata duration to match processed audio length
+
+### Cross-Platform Compatibility
+- Robust home directory resolution (`$env:HOME`, `$env:USERPROFILE`, etc.)
+- Works with PowerShell Core (`pwsh`) on all platforms
+- Handles path resolution and tilde expansion correctly
 
 ## Requirements
 
@@ -188,7 +211,7 @@ Longest silence detected: 00:00:05.250
    - Process files with problematic silence (trim/reduce)
    - Move originals with silence to `~/Downloads/UnmodifiedOriginals`
    - Place all processed/clean files in `~/Downloads/Output`
-   - Empty the `~/Downloads/Input` folder
+   - Move files from the `~/Downloads/Input` folder
 5. **Review** results:
    - Cleaned files ready for playout: `~/Downloads/Output` folder
    - Original problematic files: `~/Downloads/UnmodifiedOriginals` folder  
