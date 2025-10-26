@@ -1,19 +1,28 @@
 # SilenceDetector
 
-A cross-platform PowerShell script for detecting and processing silence periods in MP3 files using FFmpeg. Designed for radio playout systems to prevent dead air by automatically cleaning files with problematic silence periods.
+A cross-platform PowerShell script for detecting and processing silence periods in MP3 files using FFmpeg. Designed for radio playout systems to prevent dead air by automatically cleaning talk audio files with problematic silence periods.
 
 ## Purpose
 
-This tool scans MP3 files for silence periods and automatically processes them to prevent dead air in radio playout systems. It detects problematic silence periods and intelligently trims or reduces them while preserving the original files for reference.
+This tool scans talk audio MP3 files for silence periods and automatically processes them to prevent dead air in radio playout systems. It detects problematic silence periods and intelligently trims or reduces them while preserving the original files for reference.
 
 ## Folder Layout
 
 The script automatically creates and uses the following folder structure. By default, folders are created in ~/Downloads/, but you can specify absolute paths for any or all folders:
 
-- **Input** → MP3 files to scan (files moved from here after processing) - Default: ~/Downloads/Input
-- **Output** → Cleaned/processed files ready for playout - Default: ~/Downloads/Output
-- **UnmodifiedOriginals** → Original files that contained problematic silence - Default: ~/Downloads/UnmodifiedOriginals
+- **Input** → Talk audio MP3 files to scan (files moved from here after processing) - Default: ~/Downloads/Input
+- **Output** → Cleaned/processed talk audio files ready for playout - Default: ~/Downloads/Output
+- **UnmodifiedOriginals** → Original talk audio files that contained problematic silence - Default: ~/Downloads/UnmodifiedOriginals
 - **Logs** → Timestamped TXT reports - Default: ~/Downloads/Logs
+
+### Recursive Directory Structure Support
+
+The script now supports recursive folder structures, preserving the directory hierarchy from the Input folder in both Output and UnmodifiedOriginals folders. This means:
+
+- **Input/Series/Episode/talk_audio.mp3** → **Output/Series/Episode/talk_audio.mp3** (cleaned)
+- **Input/Series/Episode/talk_audio.mp3** → **UnmodifiedOriginals/Series/Episode/talk_audio.mp3** (original with silence)
+
+The script automatically creates the necessary subdirectories in the output folders to maintain the same structure as your input organization.
 
 ## Quick Start
 
@@ -35,6 +44,7 @@ pwsh ./ScanSilence.ps1
 ## Features
 
 - **Cross-platform**: Works on Windows, macOS, and Linux
+- **Recursive directory support**: Preserves folder structure from Input to Output and UnmodifiedOriginals
 - **Visual progress tracking**: Real-time progress bar showing current file and completion percentage
 - **Audio quality preservation**: Automatically detects and preserves original bitrate, codec, and sample rate
 - **Robust error handling**: 
@@ -82,8 +92,8 @@ The `-DryRun` parameter enables analysis mode where the script examines files an
 ```
 🔍 DRY RUN: Would process silence periods and create cleaned version
   - END silence: 00:00:03.500 → 00:00:00.500 (saves 00:00:03.000)
-  → Original would be moved to: UnmodifiedOriginals/song.mp3
-  → Cleaned version would be created in: Output/song.mp3
+  → Original would be moved to: UnmodifiedOriginals/talk_audio.mp3
+  → Cleaned version would be created in: Output/talk_audio.mp3
 ```
 
 ## Configuration
@@ -177,12 +187,12 @@ pwsh ./ScanSilence.ps1 -DryRun -Threshold -35 -StartEndSilenceDuration 0.3 -Midd
 
 **Using absolute paths (Windows):**
 ```powershell
-pwsh ./ScanSilence.ps1 -InputPath "C:\Music\ToScan" -OutputPath "C:\Music\Processed" -UnmodifiedOriginalsPath "C:\Music\Flagged" -LogsPath "C:\Music\Reports"
+pwsh ./ScanSilence.ps1 -InputPath "C:\Audio\ToScan" -OutputPath "C:\Audio\Processed" -UnmodifiedOriginalsPath "C:\Audio\Flagged" -LogsPath "C:\Audio\Reports"
 ```
 
 **Using absolute paths (Mac/Linux):**
 ```powershell
-pwsh ./ScanSilence.ps1 -InputPath "/Users/username/Music/ToScan" -OutputPath "/Users/username/Music/Processed" -UnmodifiedOriginalsPath "/Users/username/Music/Flagged" -LogsPath "/Users/username/Music/Reports"
+pwsh ./ScanSilence.ps1 -InputPath "/Users/username/Audio/ToScan" -OutputPath "/Users/username/Audio/Processed" -UnmodifiedOriginalsPath "/Users/username/Audio/Flagged" -LogsPath "/Users/username/Audio/Reports"
 ```
 
 ## Technical Implementation
@@ -272,7 +282,7 @@ MinSilence: 3 seconds
 
 Files to scan: 5
 
-File: song1.mp3
+File: talk_audio1.mp3
 Duration: 00:03:45.123
 silence_start: 00:00:00.000 [START]
 silence_end: 00:00:03.500 [START]
@@ -299,17 +309,17 @@ Longest silence detected: 00:00:05.250
 ### Option 1: Default Behavior (Downloads Folder)
 1. **Setup**: Place `ffmpeg.exe` (Windows) or `ffmpeg` (Mac/Linux) in the script directory
 2. **Configure** (optional): Edit `config.txt` to customize thresholds and paths
-3. **Place MP3 files** in `~/Downloads/Input` folder (created automatically)
+3. **Place talk audio MP3 files** in `~/Downloads/Input` folder (created automatically) - supports nested subdirectories
 4. **Run** the appropriate script for your platform
 5. **Processing**: The script will:
-   - Scan all MP3 files for silence
+   - Scan all talk audio MP3 files for silence (including subdirectories)
    - Process files with problematic silence (trim/reduce)
-   - Move originals with silence to `~/Downloads/UnmodifiedOriginals`
-   - Place all processed/clean files in `~/Downloads/Output`
+   - Move originals with silence to `~/Downloads/UnmodifiedOriginals` (preserving directory structure)
+   - Place all processed/clean talk audio files in `~/Downloads/Output` (preserving directory structure)
    - Move files from the `~/Downloads/Input` folder
 6. **Review** results:
-   - Cleaned files ready for playout: `~/Downloads/Output` folder
-   - Original problematic files: `~/Downloads/UnmodifiedOriginals` folder  
+   - Cleaned talk audio files ready for playout: `~/Downloads/Output` folder (with preserved directory structure)
+   - Original problematic talk audio files: `~/Downloads/UnmodifiedOriginals` folder (with preserved directory structure)
    - Detailed reports: `~/Downloads/Logs` folder
 
 ### Option 2: Custom Absolute Paths
@@ -317,7 +327,7 @@ Longest silence detected: 00:00:05.250
 2. **Configure**: Edit `config.txt` with your custom paths, or use command line parameters
 3. **Run** the script from anywhere:
    ```powershell
-   pwsh /path/to/ScanSilence.ps1 -InputPath "/absolute/path/to/mp3s" -OutputPath "/path/to/clean" -UnmodifiedOriginalsPath "/path/to/originals" -LogsPath "/absolute/path/to/reports"
+   pwsh /path/to/ScanSilence.ps1 -InputPath "/absolute/path/to/talk_audio" -OutputPath "/path/to/clean" -UnmodifiedOriginalsPath "/path/to/originals" -LogsPath "/absolute/path/to/reports"
    ```
 4. **Review** results in your specified directories
 

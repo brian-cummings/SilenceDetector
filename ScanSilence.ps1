@@ -323,6 +323,22 @@ function Convert-ToTimecode {
     return "{0:00}:{1:00}:{2:00}.{3:000}" -f $hours, $minutes, $secs, $milliseconds
 }
 
+function Get-RelativePath {
+    param(
+        [string]$FilePath,
+        [string]$BasePath
+    )
+    
+    # Normalize paths for comparison
+    $normalizedFilePath = [System.IO.Path]::GetFullPath($FilePath)
+    $normalizedBasePath = [System.IO.Path]::GetFullPath($BasePath)
+    
+    # Get the relative path from base to file
+    $relativePath = [System.IO.Path]::GetRelativePath($normalizedBasePath, $normalizedFilePath)
+    
+    return $relativePath
+}
+
 function Format-FFmpegDuration {
     param([double]$Seconds)
     
@@ -956,6 +972,10 @@ if ($config.DryRun) {
     foreach ($result in $filesWithSilence) {
         Write-Host ""
         Write-Host "📁 $($result.FileName)" -ForegroundColor Yellow
+        
+        # Get relative path to show correct destination paths
+        $relativePath = Get-RelativePath -FilePath $result.FilePath -BasePath $InputFolderFull
+        
         Write-Host "  → Would process silence periods and create cleaned version"
         
         foreach ($period in $result.SilencePeriods) {
@@ -970,14 +990,19 @@ if ($config.DryRun) {
             Write-Host "    - $($period.Location) silence: $originalTimecode → $newTimecode (saves $savedTimecode)" -ForegroundColor Gray
         }
         
-        Write-Host "  → Original would be moved to: $UnmodifiedOriginalsFolder/$($result.FileName)" -ForegroundColor Gray
-        Write-Host "  → Cleaned version would be created in: $OutputFolder/$($result.FileName)" -ForegroundColor Gray
+        Write-Host "  → Original would be moved to: $UnmodifiedOriginalsFolder/$relativePath" -ForegroundColor Gray
+        Write-Host "  → Cleaned version would be created in: $OutputFolder/$relativePath" -ForegroundColor Gray
     }
     
     foreach ($result in $filesWithoutSilence) {
         Write-Host ""
         Write-Host "📁 $($result.FileName)" -ForegroundColor Green
+        
+        # Get relative path to show correct destination path
+        $relativePath = Get-RelativePath -FilePath $result.FilePath -BasePath $InputFolderFull
+        
         Write-Host "  → No significant silence - would move to Output unchanged" -ForegroundColor Gray
+        Write-Host "  → Would be moved to: $OutputFolder/$relativePath" -ForegroundColor Gray
     }
 } else {
     # Actually process the files
@@ -995,8 +1020,20 @@ if ($config.DryRun) {
         if ($result.HasSilence) {
             Write-Host "[$processedCount/$totalToProcess] 🎵 Processing $($result.FileName)" -ForegroundColor Yellow
             
-            # Copy original to UnmodifiedOriginals
-            $originalDestination = Resolve-FullPath (Join-Path $UnmodifiedOriginalsFolder $result.FileName)
+            # Get relative path to preserve directory structure
+            $relativePath = Get-RelativePath -FilePath $result.FilePath -BasePath $InputFolderFull
+            $relativeDir = Split-Path $relativePath -Parent
+            
+            # Copy original to UnmodifiedOriginals (preserving directory structure)
+            if ($relativeDir -and $relativeDir -ne ".") {
+                $originalDestinationDir = Resolve-FullPath (Join-Path $UnmodifiedOriginalsFolder $relativeDir)
+                if (-not (Test-Path $originalDestinationDir)) {
+                    New-Item -ItemType Directory -Path $originalDestinationDir -Force | Out-Null
+                }
+                $originalDestination = Resolve-FullPath (Join-Path $UnmodifiedOriginalsFolder $relativePath)
+            } else {
+                $originalDestination = Resolve-FullPath (Join-Path $UnmodifiedOriginalsFolder $result.FileName)
+            }
             
             if (Test-Path $originalDestination) {
                 Write-Host "  ⚠️  Original file already exists in UnmodifiedOriginals, skipping copy" -ForegroundColor Yellow
@@ -1011,8 +1048,16 @@ if ($config.DryRun) {
                 Copy-Item -Path $sourceFile -Destination $originalDestination -Force
             }
             
-            # Process the file
-            $cleanDestination = Resolve-FullPath (Join-Path $OutputFolder $result.FileName)
+            # Process the file (preserving directory structure)
+            if ($relativeDir -and $relativeDir -ne ".") {
+                $cleanDestinationDir = Resolve-FullPath (Join-Path $OutputFolder $relativeDir)
+                if (-not (Test-Path $cleanDestinationDir)) {
+                    New-Item -ItemType Directory -Path $cleanDestinationDir -Force | Out-Null
+                }
+                $cleanDestination = Resolve-FullPath (Join-Path $OutputFolder $relativePath)
+            } else {
+                $cleanDestination = Resolve-FullPath (Join-Path $OutputFolder $result.FileName)
+            }
             $editResult = Edit-AudioFile -InputFile $sourceFile -OutputFile $cleanDestination -SilencePeriods $result.SilencePeriods -TotalDuration $result.TotalDuration -AudioProperties $result.AudioProperties -StartEndDuration $StartEndSilenceDuration -MiddleDuration $MiddleSilenceDuration
             
             if ($editResult.Success) {
@@ -1043,8 +1088,20 @@ if ($config.DryRun) {
         } else {
             Write-Host "[$processedCount/$totalToProcess] 📋 Moving $($result.FileName)" -ForegroundColor Green
             
-            # Copy unchanged file to Output
-            $cleanDestination = Resolve-FullPath (Join-Path $OutputFolder $result.FileName)
+            # Get relative path to preserve directory structure
+            $relativePath = Get-RelativePath -FilePath $result.FilePath -BasePath $InputFolderFull
+            $relativeDir = Split-Path $relativePath -Parent
+            
+            # Copy unchanged file to Output (preserving directory structure)
+            if ($relativeDir -and $relativeDir -ne ".") {
+                $cleanDestinationDir = Resolve-FullPath (Join-Path $OutputFolder $relativeDir)
+                if (-not (Test-Path $cleanDestinationDir)) {
+                    New-Item -ItemType Directory -Path $cleanDestinationDir -Force | Out-Null
+                }
+                $cleanDestination = Resolve-FullPath (Join-Path $OutputFolder $relativePath)
+            } else {
+                $cleanDestination = Resolve-FullPath (Join-Path $OutputFolder $result.FileName)
+            }
             
             if (Test-Path $cleanDestination) {
                 Write-Host "  ⚠️  File already exists in Output, skipping copy" -ForegroundColor Yellow
