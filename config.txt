@@ -3,7 +3,10 @@
 
 # Silence Detection Settings
 threshold=-40
-minSilence=3
+minSilenceStartEnd=1
+minSilenceMiddle=3
+# Legacy compatibility key (optional). If set, it applies to both start/end and middle detection:
+# minSilence=3
 startEndSilenceDuration=0.5
 middleSilenceDuration=2.5
 contentThreshold=0.1

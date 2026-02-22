@@ -1,6 +1,8 @@
 param(
     [Nullable[double]]$Threshold,
     [Nullable[double]]$MinSilence,
+    [Nullable[double]]$MinSilenceStartEnd,
+    [Nullable[double]]$MinSilenceMiddle,
     [Nullable[double]]$StartEndSilenceDuration,
     [Nullable[double]]$MiddleSilenceDuration,
     [Nullable[double]]$ContentThreshold,
@@ -20,6 +22,8 @@ function Read-ConfigFile {
     $config = @{
         Threshold = -40
         MinSilence = 3
+        MinSilenceStartEnd = 3
+        MinSilenceMiddle = 3
         StartEndSilenceDuration = 0.5
         MiddleSilenceDuration = 2.5
         ContentThreshold = 0.1
@@ -71,9 +75,30 @@ function Read-ConfigFile {
                         $parsedValue = 0.0
                         if ([double]::TryParse($value, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedValue)) {
                             $config.MinSilence = $parsedValue
+                            # Backward compatibility: legacy MinSilence sets both location-specific thresholds
+                            $config.MinSilenceStartEnd = $parsedValue
+                            $config.MinSilenceMiddle = $parsedValue
                             Write-Verbose "Config: Set MinSilence = $parsedValue"
                         } else {
                             Write-Warning "Config: Failed to parse minSilence value '$value', using default: $($config.MinSilence)"
+                        }
+                    }
+                    "minsilencestartend" {
+                        $parsedValue = 0.0
+                        if ([double]::TryParse($value, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedValue)) {
+                            $config.MinSilenceStartEnd = $parsedValue
+                            Write-Verbose "Config: Set MinSilenceStartEnd = $parsedValue"
+                        } else {
+                            Write-Warning "Config: Failed to parse minSilenceStartEnd value '$value', using default: $($config.MinSilenceStartEnd)"
+                        }
+                    }
+                    "minsilencemiddle" {
+                        $parsedValue = 0.0
+                        if ([double]::TryParse($value, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$parsedValue)) {
+                            $config.MinSilenceMiddle = $parsedValue
+                            Write-Verbose "Config: Set MinSilenceMiddle = $parsedValue"
+                        } else {
+                            Write-Warning "Config: Failed to parse minSilenceMiddle value '$value', using default: $($config.MinSilenceMiddle)"
                         }
                     }
                     "startendsilenceduration" { 
@@ -122,7 +147,8 @@ function Read-ConfigFile {
         # Show summary of loaded values
         Write-Host "Config loaded successfully:" -ForegroundColor Green
         Write-Host "  Threshold: $($config.Threshold) dB" -ForegroundColor Gray
-        Write-Host "  MinSilence: $($config.MinSilence) seconds" -ForegroundColor Gray
+        Write-Host "  MinSilenceStartEnd: $($config.MinSilenceStartEnd) seconds" -ForegroundColor Gray
+        Write-Host "  MinSilenceMiddle: $($config.MinSilenceMiddle) seconds" -ForegroundColor Gray
         Write-Host "  StartEndSilenceDuration: $($config.StartEndSilenceDuration) seconds" -ForegroundColor Gray
         Write-Host "  MiddleSilenceDuration: $($config.MiddleSilenceDuration) seconds" -ForegroundColor Gray
         Write-Host "  ContentThreshold: $($config.ContentThreshold) seconds" -ForegroundColor Gray
@@ -144,7 +170,17 @@ if ($Threshold.HasValue) {
 }
 if ($MinSilence.HasValue) { 
     Write-Host "  Overriding MinSilence: $($config.MinSilence) -> $($MinSilence.Value)" -ForegroundColor Yellow
-    $config.MinSilence = $MinSilence.Value 
+    $config.MinSilence = $MinSilence.Value
+    $config.MinSilenceStartEnd = $MinSilence.Value
+    $config.MinSilenceMiddle = $MinSilence.Value
+}
+if ($MinSilenceStartEnd.HasValue) {
+    Write-Host "  Overriding MinSilenceStartEnd: $($config.MinSilenceStartEnd) -> $($MinSilenceStartEnd.Value)" -ForegroundColor Yellow
+    $config.MinSilenceStartEnd = $MinSilenceStartEnd.Value
+}
+if ($MinSilenceMiddle.HasValue) {
+    Write-Host "  Overriding MinSilenceMiddle: $($config.MinSilenceMiddle) -> $($MinSilenceMiddle.Value)" -ForegroundColor Yellow
+    $config.MinSilenceMiddle = $MinSilenceMiddle.Value
 }
 if ($StartEndSilenceDuration.HasValue) { 
     Write-Host "  Overriding StartEndSilenceDuration: $($config.StartEndSilenceDuration) -> $($StartEndSilenceDuration.Value)" -ForegroundColor Yellow
@@ -174,6 +210,14 @@ if ($config.MinSilence -lt 0.1) {
     Write-Warning "MinSilence value ($($config.MinSilence) seconds) is too low. This may cause performance issues and detect micro-silences. Minimum recommended: 0.5 seconds"
     $config.MinSilence = [math]::Max($config.MinSilence, 0.1)  # Enforce minimum
 }
+if ($config.MinSilenceStartEnd -lt 0.1) {
+    Write-Warning "MinSilenceStartEnd value ($($config.MinSilenceStartEnd) seconds) is too low. Minimum recommended: 0.5 seconds"
+    $config.MinSilenceStartEnd = [math]::Max($config.MinSilenceStartEnd, 0.1)
+}
+if ($config.MinSilenceMiddle -lt 0.1) {
+    Write-Warning "MinSilenceMiddle value ($($config.MinSilenceMiddle) seconds) is too low. Minimum recommended: 0.5 seconds"
+    $config.MinSilenceMiddle = [math]::Max($config.MinSilenceMiddle, 0.1)
+}
 if ($config.StartEndSilenceDuration -lt 0) {
     Write-Warning "StartEndSilenceDuration cannot be negative. Setting to 0.5 seconds"
     $config.StartEndSilenceDuration = 0.5
@@ -185,10 +229,12 @@ if ($config.MiddleSilenceDuration -lt 0) {
 
 # Set variables from config
 $Threshold = $config.Threshold
-$MinSilence = $config.MinSilence
+$MinSilenceStartEnd = $config.MinSilenceStartEnd
+$MinSilenceMiddle = $config.MinSilenceMiddle
 $StartEndSilenceDuration = $config.StartEndSilenceDuration
 $MiddleSilenceDuration = $config.MiddleSilenceDuration
 $ContentThreshold = $config.ContentThreshold
+$DetectionMinSilence = [math]::Min($MinSilenceStartEnd, $MinSilenceMiddle)
 
 # Set paths from config
 $InputFolder = $config.InputPath
@@ -286,7 +332,9 @@ if ($config.DryRun) {
 Write-Host "Silence Detection Scan - $timestamp"
     Write-Host "=========================================="
 }
-Write-Host "Threshold: $Threshold dB, MinSilence: $MinSilence seconds"
+Write-Host "Threshold: $Threshold dB"
+Write-Host "Min silence (start/end): $MinSilenceStartEnd seconds"
+Write-Host "Min silence (middle): $MinSilenceMiddle seconds"
 Write-Host "Start/End silence duration: $StartEndSilenceDuration seconds"
 Write-Host "Middle silence duration: $MiddleSilenceDuration seconds"
 Write-Host "Content threshold: $ContentThreshold seconds"
@@ -306,7 +354,8 @@ Add-Content -Path $txtReportFile -Value "Silence Detection Report - $timestamp"
 Add-Content -Path $txtReportFile -Value "=========================================="
 }
 Add-Content -Path $txtReportFile -Value "Threshold: $Threshold dB"
-Add-Content -Path $txtReportFile -Value "MinSilence: $MinSilence seconds"
+Add-Content -Path $txtReportFile -Value "MinSilenceStartEnd: $MinSilenceStartEnd seconds"
+Add-Content -Path $txtReportFile -Value "MinSilenceMiddle: $MinSilenceMiddle seconds"
 Add-Content -Path $txtReportFile -Value "Start/End silence duration: $StartEndSilenceDuration seconds"
 Add-Content -Path $txtReportFile -Value "Middle silence duration: $MiddleSilenceDuration seconds"
 Add-Content -Path $txtReportFile -Value "Content threshold: $ContentThreshold seconds"
@@ -791,7 +840,7 @@ for ($i = 0; $i -lt $totalFiles; $i++) {
         # Run silence detection
     $ffmpegArgs = @(
             "-i", "`"$($file.FullName)`"",
-        "-af", "silencedetect=noise=$($Threshold)dB:d=$MinSilence",
+        "-af", "silencedetect=noise=$($Threshold)dB:d=$DetectionMinSilence",
         "-f", "null",
         "-"
     )
@@ -874,8 +923,14 @@ for ($i = 0; $i -lt $totalFiles; $i++) {
                     
                     # Filter out extremely small silence periods that can cause FFmpeg parsing issues
                     # Minimum threshold of 0.001 seconds (1ms) to avoid scientific notation problems
-                    if ($silenceDuration -ge $MinSilence -and $silenceDuration -ge 0.001) {
+                    if ($silenceDuration -ge 0.001) {
                         $location = Get-SilenceLocation $currentSilenceStart $silenceEnd $totalDuration $ContentThreshold
+                        $requiredMinSilence = if ($location -eq "MIDDLE") { $MinSilenceMiddle } else { $MinSilenceStartEnd }
+                        
+                        if ($silenceDuration -lt $requiredMinSilence) {
+                            $currentSilenceStart = $null
+                            continue
+                        }
                         
                         $fileSilencePeriods += @{
                             Start = $currentSilenceStart

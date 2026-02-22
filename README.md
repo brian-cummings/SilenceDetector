@@ -113,7 +113,10 @@ The script now supports a simple text configuration file (`config.txt`) that all
 
 # Silence Detection Settings
 threshold=-40
-minSilence=3
+minSilenceStartEnd=1
+minSilenceMiddle=3
+# Legacy compatibility key (optional). If set, it applies to both thresholds:
+# minSilence=3
 startEndSilenceDuration=0.5
 middleSilenceDuration=2.5
 contentThreshold=0.1
@@ -143,7 +146,9 @@ dryRun=false
 
 ### Default Parameters
 - **Threshold**: -40 dB (adjustable via `-Threshold` parameter)
-- **MinSilence**: 3 seconds (adjustable via `-MinSilence` parameter)
+- **MinSilenceStartEnd**: 1 second (adjustable via `-MinSilenceStartEnd` parameter)
+- **MinSilenceMiddle**: 3 seconds (adjustable via `-MinSilenceMiddle` parameter)
+- **MinSilence** (legacy compatibility): applies the same detection threshold to both start/end and middle
 - **StartEndSilenceDuration**: 0.5 seconds (adjustable via `-StartEndSilenceDuration` parameter)
 - **MiddleSilenceDuration**: 2.5 seconds (adjustable via `-MiddleSilenceDuration` parameter)
 - **ContentThreshold**: 0.1 seconds (adjustable via `-ContentThreshold` parameter)
@@ -166,7 +171,7 @@ dryRun=false
 
 **Option 2: Command line parameters (for one-time overrides)**
 ```powershell
-pwsh ./ScanSilence.ps1 -Threshold -35 -MinSilence 5
+pwsh ./ScanSilence.ps1 -Threshold -35 -MinSilenceStartEnd 1 -MinSilenceMiddle 5
 ```
 
 **Custom silence processing durations:**
@@ -176,7 +181,7 @@ pwsh ./ScanSilence.ps1 -StartEndSilenceDuration 1.0 -MiddleSilenceDuration 3.0
 
 **Comprehensive example with all audio processing parameters:**
 ```powershell
-pwsh ./ScanSilence.ps1 -Threshold -35 -MinSilence 4 -StartEndSilenceDuration 0.3 -MiddleSilenceDuration 2.0
+pwsh ./ScanSilence.ps1 -Threshold -35 -MinSilenceStartEnd 1 -MinSilenceMiddle 4 -StartEndSilenceDuration 0.3 -MiddleSilenceDuration 2.0
 ```
 
 **Dry run mode (analysis only, no file changes):**
@@ -287,7 +292,8 @@ sudo dnf install powershell ffmpeg
 Silence Detection Report - 2024-01-15_14-30-25
 ==========================================
 Threshold: -40 dB
-MinSilence: 3 seconds
+MinSilenceStartEnd: 1 seconds
+MinSilenceMiddle: 3 seconds
 
 Files to scan: 5
 
