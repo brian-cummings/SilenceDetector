@@ -15,4 +15,5 @@ unmodifiedOriginalsPath=~/Downloads/UnmodifiedOriginals
 logsPath=~/Downloads/Logs
 
 # Processing Options
+moveOnlyModifiedFiles=true
 dryRun=false

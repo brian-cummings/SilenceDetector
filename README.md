@@ -68,7 +68,7 @@ pwsh ./ScanSilence.ps1
   - END: Silence with meaningful content before but not after  
   - MIDDLE: Silence with meaningful content both before and after
 - **Timecode output**: Converts seconds to HH:MM:SS.mmm format
-- **Input folder cleanup**: Moves files from Input folder after processing
+- **Configurable Input cleanup**: Move all files from Input (default) or only files that were modified
 - **Summary statistics**: Reports files processed, flagged, and longest silence detected
 
 ## Dry Run Mode
@@ -125,6 +125,7 @@ unmodifiedOriginalsPath=~/Downloads/UnmodifiedOriginals
 logsPath=~/Downloads/Logs
 
 # Processing Options
+moveOnlyModifiedFiles=false
 dryRun=false
 ```
 
@@ -149,6 +150,9 @@ dryRun=false
   - Minimum duration to consider as "meaningful content" when classifying silence location
 - **DryRun**: Disabled (enable with `-DryRun` switch)
   - Analysis mode that shows what would be processed without making any changes
+- **MoveOnlyModifiedFiles**: Disabled by default (enable with `moveOnlyModifiedFiles=true` in `config.txt` or `-MoveOnlyModifiedFiles $true`)
+  - When enabled, only files that need silence edits are written to Output and removed from Input
+  - Files without significant silence stay in Input and are not copied to Output
 - **InputPath**: "~/Downloads/Input" (or specify absolute path)
 - **OutputPath**: "~/Downloads/Output" (or specify absolute path)
 - **UnmodifiedOriginalsPath**: "~/Downloads/UnmodifiedOriginals" (or specify absolute path)
@@ -183,6 +187,11 @@ pwsh ./ScanSilence.ps1 -DryRun
 **Dry run with custom parameters:**
 ```powershell
 pwsh ./ScanSilence.ps1 -DryRun -Threshold -35 -StartEndSilenceDuration 0.3 -MiddleSilenceDuration 2.0
+```
+
+**Only move modified files (leave unchanged files in Input):**
+```powershell
+pwsh ./ScanSilence.ps1 -MoveOnlyModifiedFiles $true
 ```
 
 **Using absolute paths (Windows):**
@@ -315,8 +324,9 @@ Longest silence detected: 00:00:05.250
    - Scan all talk audio MP3 files for silence (including subdirectories)
    - Process files with problematic silence (trim/reduce)
    - Move originals with silence to `~/Downloads/UnmodifiedOriginals` (preserving directory structure)
-   - Place all processed/clean talk audio files in `~/Downloads/Output` (preserving directory structure)
-   - Move files from the `~/Downloads/Input` folder
+   - Place cleaned files in `~/Downloads/Output` (preserving directory structure)
+   - By default, also copy unchanged files to `~/Downloads/Output` and clean Input
+   - If `moveOnlyModifiedFiles=true`, unchanged files stay in Input and are not copied to Output
 6. **Review** results:
    - Cleaned talk audio files ready for playout: `~/Downloads/Output` folder (with preserved directory structure)
    - Original problematic talk audio files: `~/Downloads/UnmodifiedOriginals` folder (with preserved directory structure)

@@ -8,6 +8,7 @@ param(
     [string]$OutputPath = "",
     [string]$UnmodifiedOriginalsPath = "",
     [string]$LogsPath = "",
+    [Nullable[bool]]$MoveOnlyModifiedFiles,
     [switch]$DryRun
 )
 
@@ -26,6 +27,7 @@ function Read-ConfigFile {
         OutputPath = "~/Downloads/Output"
         UnmodifiedOriginalsPath = "~/Downloads/UnmodifiedOriginals"
         LogsPath = "~/Downloads/Logs"
+        MoveOnlyModifiedFiles = $false
         DryRun = $false
     }
     
@@ -105,6 +107,9 @@ function Read-ConfigFile {
                     "outputpath" { $config.OutputPath = $value }
                     "unmodifiedoriginalspath" { $config.UnmodifiedOriginalsPath = $value }
                     "logspath" { $config.LogsPath = $value }
+                    "moveonlymodifiedfiles" {
+                        $config.MoveOnlyModifiedFiles = ($value -eq "true" -or $value -eq "1")
+                    }
                     "dryrun" { 
                         $config.DryRun = ($value -eq "true" -or $value -eq "1")
                     }
@@ -121,6 +126,7 @@ function Read-ConfigFile {
         Write-Host "  StartEndSilenceDuration: $($config.StartEndSilenceDuration) seconds" -ForegroundColor Gray
         Write-Host "  MiddleSilenceDuration: $($config.MiddleSilenceDuration) seconds" -ForegroundColor Gray
         Write-Host "  ContentThreshold: $($config.ContentThreshold) seconds" -ForegroundColor Gray
+        Write-Host "  MoveOnlyModifiedFiles: $($config.MoveOnlyModifiedFiles)" -ForegroundColor Gray
     } else {
         Write-Host "Config file not found: $ConfigPath - Using defaults" -ForegroundColor Yellow
     }
@@ -156,6 +162,7 @@ if (-not [string]::IsNullOrEmpty($InputPath)) { $config.InputPath = $InputPath }
 if (-not [string]::IsNullOrEmpty($OutputPath)) { $config.OutputPath = $OutputPath }
 if (-not [string]::IsNullOrEmpty($UnmodifiedOriginalsPath)) { $config.UnmodifiedOriginalsPath = $UnmodifiedOriginalsPath }
 if (-not [string]::IsNullOrEmpty($LogsPath)) { $config.LogsPath = $LogsPath }
+if ($MoveOnlyModifiedFiles.HasValue) { $config.MoveOnlyModifiedFiles = $MoveOnlyModifiedFiles.Value }
 if ($DryRun) { $config.DryRun = $true }
 
 # Validate configuration values to prevent problematic settings
@@ -287,6 +294,7 @@ Write-Host "Input folder: $InputFolder"
 Write-Host "Output folder: $OutputFolder"
 Write-Host "UnmodifiedOriginals folder: $UnmodifiedOriginalsFolder"
 Write-Host "Logs folder: $LogsFolder"
+Write-Host "Move only modified files: $($config.MoveOnlyModifiedFiles)"
 
 # Initialize report files
 if ($config.DryRun) {
@@ -308,6 +316,7 @@ Add-Content -Path $txtReportFile -Value "Input folder: $InputFolderFull"
 Add-Content -Path $txtReportFile -Value "Output folder: $OutputFolderFull"
 Add-Content -Path $txtReportFile -Value "UnmodifiedOriginals folder: $UnmodifiedOriginalsFolderFull"
 Add-Content -Path $txtReportFile -Value "Logs folder: $LogsFolderFull"
+Add-Content -Path $txtReportFile -Value "Move only modified files: $($config.MoveOnlyModifiedFiles)"
 Add-Content -Path $txtReportFile -Value ""
 
 
@@ -957,12 +966,18 @@ Write-Host ""
 Write-Host "🎵 PHASE 2: Processing Files Based on Detection Results"
 Write-Host "=============================================="
 
-$filesToProcess = $allDetectionResults | Where-Object { $_.Success }
-$filesWithSilence = $filesToProcess | Where-Object { $_.HasSilence }
-$filesWithoutSilence = $filesToProcess | Where-Object { -not $_.HasSilence }
+$allSuccessfulFiles = $allDetectionResults | Where-Object { $_.Success }
+$filesWithSilence = $allSuccessfulFiles | Where-Object { $_.HasSilence }
+$filesWithoutSilence = $allSuccessfulFiles | Where-Object { -not $_.HasSilence }
+$filesToProcess = if ($config.MoveOnlyModifiedFiles) { $filesWithSilence } else { $allSuccessfulFiles }
 
 Write-Host "Files requiring silence processing: $($filesWithSilence.Count)"
-Write-Host "Files to move unchanged: $($filesWithoutSilence.Count)"
+if ($config.MoveOnlyModifiedFiles) {
+    Write-Host "Files to move unchanged: 0 (disabled by MoveOnlyModifiedFiles)" -ForegroundColor Gray
+    Write-Host "Files to keep in Input unchanged: $($filesWithoutSilence.Count)" -ForegroundColor Gray
+} else {
+    Write-Host "Files to move unchanged: $($filesWithoutSilence.Count)"
+}
 
 if ($config.DryRun) {
     Write-Host ""
@@ -1001,8 +1016,13 @@ if ($config.DryRun) {
         # Get relative path to show correct destination path
         $relativePath = Get-RelativePath -FilePath $result.FilePath -BasePath $InputFolderFull
         
-        Write-Host "  → No significant silence - would move to Output unchanged" -ForegroundColor Gray
-        Write-Host "  → Would be moved to: $OutputFolder/$relativePath" -ForegroundColor Gray
+        if ($config.MoveOnlyModifiedFiles) {
+            Write-Host "  → No significant silence - would remain in Input (not copied to Output)" -ForegroundColor Gray
+            Write-Host "  → Would remain at: $InputFolder/$relativePath" -ForegroundColor Gray
+        } else {
+            Write-Host "  → No significant silence - would move to Output unchanged" -ForegroundColor Gray
+            Write-Host "  → Would be moved to: $OutputFolder/$relativePath" -ForegroundColor Gray
+        }
     }
 } else {
     # Actually process the files
@@ -1123,28 +1143,32 @@ if ($config.DryRun) {
 }
 
 # Clean up Input folder
+$filesToRemoveFromInput = if ($config.MoveOnlyModifiedFiles) { $filesToProcess | ForEach-Object { $_.FilePath } } else { $mp3Files | ForEach-Object { $_.FullName } }
+$totalFilesToRemove = $filesToRemoveFromInput.Count
+
 if ($config.DryRun) {
     Write-Host ""
-    Write-Host "🔍 DRY RUN: Input folder cleanup would remove $totalFiles files" -ForegroundColor Cyan
+    Write-Host "🔍 DRY RUN: Input folder cleanup would remove $totalFilesToRemove files" -ForegroundColor Cyan
     Write-Host "Files that would be removed from Input folder:" -ForegroundColor Gray
-    foreach ($file in $mp3Files) {
-        Write-Host "  - $($file.Name)" -ForegroundColor Gray
+    foreach ($filePath in $filesToRemoveFromInput) {
+        Write-Host "  - $([System.IO.Path]::GetFileName($filePath))" -ForegroundColor Gray
     }
 } else {
     Write-Host ""
     Write-Host "Cleaning up Input folder..."
 
     $cleanupCount = 0
-    foreach ($file in $mp3Files) {
+    foreach ($filePath in $filesToRemoveFromInput) {
         $cleanupCount++
-        $cleanupPercent = [math]::Round(($cleanupCount / $totalFiles) * 100, 1)
-        Write-Progress -Activity "Cleaning Input Folder" -Status "Removing: $($file.Name)" -PercentComplete $cleanupPercent -CurrentOperation "File $cleanupCount of $totalFiles"
+        $cleanupPercent = if ($totalFilesToRemove -gt 0) { [math]::Round(($cleanupCount / $totalFilesToRemove) * 100, 1) } else { 100 }
+        $fileName = [System.IO.Path]::GetFileName($filePath)
+        Write-Progress -Activity "Cleaning Input Folder" -Status "Removing: $fileName" -PercentComplete $cleanupPercent -CurrentOperation "File $cleanupCount of $totalFilesToRemove"
         
         try {
-            Remove-Item -Path $file.FullName -Force
-            Write-Host "  Removed: $($file.Name)"
+            Remove-Item -Path $filePath -Force
+            Write-Host "  Removed: $fileName"
         } catch {
-            Write-Warning "Could not remove $($file.Name) from Input folder: $($_.Exception.Message)"
+            Write-Warning "Could not remove $fileName from Input folder: $($_.Exception.Message)"
         }
     }
 
@@ -1154,14 +1178,23 @@ if ($config.DryRun) {
 # Final reporting
 $longestSilenceTimecode = Convert-ToTimecode $longestSilence
 $filesProcessed = $allDetectionResults.Count
+$filesMovedUnchanged = if ($config.MoveOnlyModifiedFiles) { 0 } else { ($filesProcessed - $filesFlagged) }
+$filesLeftInInputUnchanged = if ($config.MoveOnlyModifiedFiles) { ($filesProcessed - $filesFlagged) } else { 0 }
 
 Add-Content -Path $txtReportFile -Value "=========================================="
 Add-Content -Path $txtReportFile -Value "SUMMARY"
 Add-Content -Path $txtReportFile -Value "Files scanned: $filesProcessed"
 Add-Content -Path $txtReportFile -Value "Files requiring silence processing: $filesFlagged"
-Add-Content -Path $txtReportFile -Value "Files moved to Output unchanged: $($filesProcessed - $filesFlagged)"
+Add-Content -Path $txtReportFile -Value "Files moved to Output unchanged: $filesMovedUnchanged"
+if ($config.MoveOnlyModifiedFiles) {
+    Add-Content -Path $txtReportFile -Value "Files left in Input unchanged: $filesLeftInInputUnchanged"
+}
 Add-Content -Path $txtReportFile -Value "Longest silence detected: $longestSilenceTimecode"
-Add-Content -Path $txtReportFile -Value "Input folder: Cleaned (all files processed)"
+if ($config.MoveOnlyModifiedFiles) {
+    Add-Content -Path $txtReportFile -Value "Input folder: Partially cleaned (only files requiring silence processing removed)"
+} else {
+    Add-Content -Path $txtReportFile -Value "Input folder: Cleaned (all files processed)"
+}
 
 
 Write-Host ""
@@ -1174,22 +1207,37 @@ if ($config.DryRun) {
     Write-Host "═════════════════════════════" -ForegroundColor Yellow
     Write-Host "Files analyzed: $filesProcessed"
     Write-Host "Files that would require silence processing: $filesFlagged"
-    Write-Host "Files that would move to Output unchanged: $($filesProcessed - $filesFlagged)"
+    Write-Host "Files that would move to Output unchanged: $filesMovedUnchanged"
+    if ($config.MoveOnlyModifiedFiles) {
+        Write-Host "Files that would remain in Input unchanged: $filesLeftInInputUnchanged"
+    }
     Write-Host "Longest silence detected: $longestSilenceTimecode"
     Write-Host ""
     Write-Host "📁 What would happen:"
     Write-Host "  - Files requiring processing → UnmodifiedOriginals (originals) + Output (cleaned)"
-    Write-Host "  - Files without significant silence → Output (unchanged)"
-    Write-Host "  - Input folder → Emptied (all files moved)"
+    if ($config.MoveOnlyModifiedFiles) {
+        Write-Host "  - Files without significant silence → Stay in Input (not copied)"
+        Write-Host "  - Input folder → Partially cleaned (only modified files removed)"
+    } else {
+        Write-Host "  - Files without significant silence → Output (unchanged)"
+        Write-Host "  - Input folder → Emptied (all files moved)"
+    }
     Write-Host ""
     Write-Host "💡 To actually process files, run without -DryRun parameter" -ForegroundColor White
 } else {
     Write-Host "Processing complete!"
     Write-Host "Files scanned: $filesProcessed"
     Write-Host "Files requiring silence processing: $filesFlagged"
-    Write-Host "Files moved to Output unchanged: $($filesProcessed - $filesFlagged)"
-Write-Host "Longest silence detected: $longestSilenceTimecode"
-    Write-Host "Input folder: Cleaned (empty)"
+    Write-Host "Files moved to Output unchanged: $filesMovedUnchanged"
+    if ($config.MoveOnlyModifiedFiles) {
+        Write-Host "Files left in Input unchanged: $filesLeftInInputUnchanged"
+    }
+    Write-Host "Longest silence detected: $longestSilenceTimecode"
+    if ($config.MoveOnlyModifiedFiles) {
+        Write-Host "Input folder: Partially cleaned (only modified files removed)"
+    } else {
+        Write-Host "Input folder: Cleaned (empty)"
+    }
     Write-Host ""
     Write-Host "Results:"
     Write-Host "  - Processed files: $OutputFolderFull"
